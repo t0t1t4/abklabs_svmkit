@@ -1,10 +1,11 @@
-package solana
+package explorer
 
 import (
 	"strings"
 
-	"github.com/abklabs/svmkit/pkg/deb"
 	"github.com/abklabs/svmkit/pkg/runner"
+	"github.com/abklabs/svmkit/pkg/runner/deb"
+	"github.com/abklabs/svmkit/pkg/solana"
 )
 
 const (
@@ -39,18 +40,20 @@ func (cmd *ExplorerCommand) Env() *runner.EnvBuilder {
 
 	b.SetIntP("EXPLORER_PORT", cmd.Flags.Port)
 
-	{
-		packages := deb.Package{}.MakePackageGroup("ufw", "nodejs", "npm")
-		packages.Add(deb.Package{Name: "svmkit-solana-explorer", Version: cmd.Version})
-
-		b.SetArray("PACKAGE_LIST", packages.Args())
-	}
+	b.Merge(cmd.RunnerCommand.Env())
 
 	return b
 
 }
 
 func (cmd *ExplorerCommand) Check() error {
+	pkgGrp := deb.Package{}.MakePackageGroup("ufw", "nodejs", "npm")
+	pkgGrp.Add(deb.Package{Name: "svmkit-solana-explorer", Version: cmd.Version})
+
+	if err := cmd.RunnerCommand.UpdatePackageGroup(pkgGrp); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -63,17 +66,23 @@ func (cmd *ExplorerCommand) AddToPayload(p *runner.Payload) error {
 
 	p.AddReader("steps.sh", explorerScript)
 
+	if err := cmd.RunnerCommand.AddToPayload(p); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 type Explorer struct {
-	Environment Environment   `pulumi:"environment"`
-	Flags       ExplorerFlags `pulumi:"flags"`
-	Version     *string       `pulumi:"version,optional"`
-	Name        *string       `pulumi:"name,optional"`
-	Symbol      *string       `pulumi:"symbol,optional"`
-	ClusterName *string       `pulumi:"clusterName,optional"`
-	RPCURL      *string       `pulumi:"RPCURL,optional"`
+	runner.RunnerCommand
+
+	Environment solana.Environment `pulumi:"environment"`
+	Flags       ExplorerFlags      `pulumi:"flags"`
+	Version     *string            `pulumi:"version,optional"`
+	Name        *string            `pulumi:"name,optional"`
+	Symbol      *string            `pulumi:"symbol,optional"`
+	ClusterName *string            `pulumi:"clusterName,optional"`
+	RPCURL      *string            `pulumi:"RPCURL,optional"`
 }
 
 func (f *Explorer) Install() runner.Command {
